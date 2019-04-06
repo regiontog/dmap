@@ -37,12 +37,8 @@
                     s4() + '-' + s4() + s4() + s4();
             }
 
-            const map = {
-                id: guid(),
-                image: "maps/1.jpg",
-            }
-
-            console.log(map.id);
+            const map = JSON.parse(localStorage.getItem(window.location.hash.split("#")[1]));
+            console.log(map);
 
             const drone = new Scaledrone('IN4foXiellAoPcJn');
             const room = drone.subscribe(map.id);
@@ -78,7 +74,7 @@
                     outgoing[msg.id].addStream(stream);
                     outgoing[msg.id].on('data', () => {
                         // Force frame to clients
-                        offScreenCtx.fillRect(0, 0, 0, 0);
+                        draw();
                     });
 
                     outgoing[msg.id].on('close', () => {
@@ -331,6 +327,17 @@
                             break;
                         case 83:
                             tool = new FowTool(true);
+                            break;
+                        case 67:
+                            const el = document.createElement('textarea');
+                            el.value = `https://regiontog.github.io/dmap/client#${map.id}`;
+                            document.body.appendChild(el);
+                            el.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(el);
+                            break;
+                        case 79:
+                            window.open(`https://regiontog.github.io/dmap/client#${map.id}`)
                             break;
                     }
 

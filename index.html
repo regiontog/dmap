@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>D&D map</title>
+</head>
+
+<style>
+</style>
+
+<body>
+    <img id="mapPreview">
+    <form id="form">
+        <input id="file" type="file" value="Browse" id="file" required accept="image/*">
+        <input type="submit" value="Create map">
+    </form>
+    <script>
+        function guid() {
+            function s4() {
+                return Math.floor((1 + Math.random()) * 0x10000)
+                    .toString(16)
+                    .substring(1);
+            }
+
+            return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+                s4() + '-' + s4() + s4() + s4();
+        }
+
+        const form = document.getElementById("form");
+
+        form.addEventListener('submit', evt => {
+            const file = document.getElementById("file").files[0];
+            const reader = new FileReader();
+
+            reader.addEventListener("load", () => {
+                console.log(reader.result);
+                const map = {
+                    id: guid(),
+                    image: reader.result,
+                }
+
+                window.localStorage.setItem(map.id, JSON.stringify(map));
+                window.location.href = `master#${map.id}`;
+            }, false);
+
+            reader.readAsDataURL(file);
+
+            return evt.preventDefault();
+        }, false);
+    </script>
+</body>
