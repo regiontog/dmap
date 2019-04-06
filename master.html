@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>D&D map</title>
+</head>
+
+<style>
+    html,
+    body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        overflow: hidden;
+        background-color: black;
+    }
+</style>
+
+<body>
+    <canvas id="canvas"></canvas>
+    <script src='https://cdn.scaledrone.com/scaledrone-lite.min.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/simple-peer/9.3.0/simplepeer.min.js'></script>
+    <script>
+        (function () {
+            function guid() {
+                function s4() {
+                    return Math.floor((1 + Math.random()) * 0x10000)
+                        .toString(16)
+                        .substring(1);
+                }
+
+                return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+                    s4() + '-' + s4() + s4() + s4();
+            }
+
+            const map = {
+                id: guid(),
+                image: "maps/1.jpg",
+            }
+
+            console.log(map.id);
+
+            const drone = new Scaledrone('IN4foXiellAoPcJn');
+            const room = drone.subscribe(map.id);
+            const outgoing = {};
+
+            room.on('open', error => {
+                if (error) {
+                    return console.error(error);
+                }
+
+                console.debug("Connected to signal room");
+            });
+
+            const messageHandlers = {
+                reqstream: msg => {
+                    outgoing[msg.id] = new SimplePeer({
+                        initiator: true,
+                        config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+                    });
+
+                    outgoing[msg.id].on('signal', signal => {
+                        drone.publish({
+                            room: map.id,
+                            message: {
+                                id: map.id,
+                                to: msg.id,
+                                signal: signal,
+                                channel: "signal",
+                            }
+                        });
+                    });
+
+                    outgoing[msg.id].addStream(stream);
+                    outgoing[msg.id].on('data', () => {
+                        // Force frame to clients
+                        offScreenCtx.fillRect(0, 0, 0, 0);
+                    });
+
+                    outgoing[msg.id].on('close', () => {
+                        delete outgoing[msg.id];
+                    });
+                },
+                signal: msg => {
+                    outgoing[msg.id].signal(msg.signal);
+                },
+            }
+
+            room.on('message', message => {
+                if (message.data.id != map.id) {
+                    (messageHandlers[message.data.channel] || (() => { }))(message.data);
+                }
+            });
+
+            class ToolBase {
+                constructor() {
+                    this.last_x = canvas.width / 2;
+                    this.last_y = canvas.height / 2;
+                }
+
+                on_move(evt) {
+                    this.last_x = evt.offsetX || (evt.pageX - canvas.offsetLeft);
+                    this.last_y = evt.offsetY || (evt.pageY - canvas.offsetTop);
+                }
+
+                on_down(evt) {
+                }
+
+                on_up(evt) {
+                }
+
+                on_wheel(evt) {
+                }
+            }
+
+            class DragTool extends ToolBase {
+                constructor() {
+                    super();
+
+                    this.drag_start = null;
+                }
+
+                on_move(evt) {
+                    super.on_move(evt);
+
+                    if (this.drag_start) {
+                        this.drag_to(ctx.transformedPoint(this.last_x, this.last_y));
+                    }
+                }
+
+                on_down(evt) {
+                    this.drag_start = ctx.transformedPoint(this.last_x, this.last_y);
+                }
+
+                on_up(evt) {
+                    this.drag_start = null;
+                }
+            }
+
+            class MoveTool extends DragTool {
+                constructor() {
+                    super();
+
+                    canvas.style.cursor = "move";
+                }
+
+                drag_to(pt) {
+                    onCtx(ctx => ctx.translate(pt.x - this.drag_start.x, pt.y - this.drag_start.y));
+
+                    draw();
+                }
+
+                on_wheel(evt) {
+                    const scale = Math.pow(scaleFactor, evt.deltaY / -Math.abs(evt.deltaY));
+
+                    const pt = ctx.transformedPoint(this.last_x, this.last_y);
+                    onCtx(ctx => {
+                        ctx.translate(pt.x, pt.y);
+
+                        ctx.scale(scale, scale);
+                        ctx.translate(-pt.x, -pt.y);
+                    });
+
+                    draw();
+
+                    return evt.preventDefault();
+                }
+            }
+
+            class FowTool extends DragTool {
+                constructor(erase) {
+                    super();
+
+                    this.erase = erase;
+
+
+                    this.queue = [];
+                    setInterval(() => this.tick(), 20);
+                }
+
+                on_down(evt) {
+                    super.on_down(evt);
+
+                    fowCtx.beginPath();
+
+                    canvas.style.cursor = "auto";
+                    fowCtx.lineWidth = 40;
+
+                    fowCtx.lineCap = "round";
+                    fowCtx.lineJoin = "round";
+
+                    if (this.erase) {
+                        fowCtx.globalCompositeOperation = "destination-out";
+                    } else {
+                        fowCtx.globalCompositeOperation = "source-over";
+                    }
+                }
+
+                on_up(evt) {
+                    super.on_up(evt);
+                    this.queue = [];
+
+                    const pt = ctx.transformedPoint(this.last_x, this.last_y);
+                    fowCtx.lineTo((pt.x - imageOffsetX) / imageScale, (pt.y - imageOffsetY) / imageScale);
+
+                    fowCtx.stroke();
+                    draw();
+                }
+
+                tick() {
+                    const len = this.queue.length;
+
+                    if (len > 0) {
+                        const avg = { x: 0, y: 0 };
+
+                        for (let point of this.queue.splice(0)) {
+                            avg.x += point.x;
+                            avg.y += point.y;
+                        }
+
+                        avg.x /= len;
+                        avg.y /= len;
+
+                        fowCtx.lineTo((avg.x - imageOffsetX) / imageScale, (avg.y - imageOffsetY) / imageScale);
+                        fowCtx.stroke();
+
+                        draw();
+                    }
+                }
+
+                drag_to(pt) {
+                    this.queue.push(pt);
+                }
+            }
+
+            const fowCanvas = document.createElement('canvas');
+            const offScreenCanvas = document.createElement('canvas');
+            const canvas = document.getElementById('canvas');
+
+            const ctx = canvas.getContext('2d');
+            const fowCtx = fowCanvas.getContext('2d');
+            const offScreenCtx = offScreenCanvas.getContext('2d');
+
+            const stream = offScreenCanvas.captureStream();
+
+            const scaleFactor = 1.1;
+
+            let imageOffsetX, imageOffsetY, imageScale;
+
+            let tool = new MoveTool();
+
+            function onCtx(fn) {
+                fn(ctx);
+                fn(offScreenCtx);
+            }
+
+            function draw() {
+                ctx.save();
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
+
+                ctx.drawImage(map_image, imageOffsetX, imageOffsetY, map_image.width * imageScale, map_image.height * imageScale);
+
+                ctx.globalAlpha = 0.5;
+                ctx.drawImage(fowCanvas, imageOffsetX, imageOffsetY, map_image.width * imageScale, map_image.height * imageScale);
+                ctx.globalAlpha = 1;
+
+                offScreenCtx.save();
+                offScreenCtx.setTransform(1, 0, 0, 1, 0, 0);
+                offScreenCtx.fillRect(0, 0, canvas.width, canvas.height);
+                offScreenCtx.restore();
+
+                offScreenCtx.drawImage(map_image, imageOffsetX, imageOffsetY, map_image.width * imageScale, map_image.height * imageScale);
+                offScreenCtx.drawImage(fowCanvas, imageOffsetX, imageOffsetY, map_image.width * imageScale, map_image.height * imageScale);
+            }
+
+            const map_image = new Image();
+
+            map_image.onload = () => {
+                console.debug("Setting event handlers.");
+
+                fowCanvas.height = map_image.height;
+                fowCanvas.width = map_image.width;
+
+                fowCtx.fillRect(0, 0, fowCanvas.width, fowCanvas.height);
+
+                function resize() {
+                    const transform = ctx.getTransform();
+
+                    canvas.height = window.innerHeight;
+                    canvas.width = window.innerWidth;
+
+                    offScreenCanvas.height = window.innerHeight;
+                    offScreenCanvas.width = window.innerWidth;
+
+                    imageScale = Math.min(canvas.width / map_image.width, canvas.height / map_image.height);
+
+                    imageOffsetX = (canvas.width / 2) - (map_image.width / 2) * imageScale;
+                    imageOffsetY = (canvas.height / 2) - (map_image.height / 2) * imageScale;
+
+                    onCtx(ctx => ctx.setTransform(transform.a, transform.b, transform.c, transform.d, transform.e, transform.f));
+                    draw();
+                }
+
+                window.addEventListener('load', () => {
+                    onCtx(ctx => trackTransforms(ctx));
+
+                    draw();
+                    resize();
+                }, false);
+
+                window.addEventListener('resize', resize, false);
+
+                canvas.addEventListener('wheel', evt => tool.on_wheel(evt), false);
+                canvas.addEventListener("mouseup", evt => tool.on_up(evt), false);
+                canvas.addEventListener("mousedown", evt => tool.on_down(evt), false);
+                canvas.addEventListener("mousemove", evt => tool.on_move(evt), false);
+
+                window.addEventListener("keydown", evt => {
+                    switch (evt.which) {
+                        case 32:
+                            tool = new MoveTool();
+                            break;
+                        case 68:
+                            tool = new FowTool(false);
+                            break;
+                        case 83:
+                            tool = new FowTool(true);
+                            break;
+                    }
+
+                }, false);
+            }
+
+            map_image.src = map.image;
+
+            // Adds ctx.getTransform() - returns an SVGMatrix
+            // Adds ctx.transformedPoint(x,y) - returns an SVGPoint
+            function trackTransforms(ctx) {
+                const svg = document.createElementNS("http://www.w3.org/2000/svg", 'svg');
+                let xform = svg.createSVGMatrix();
+                ctx.getTransform = function () { return xform; };
+
+                const savedTransforms = [];
+                const save = ctx.save;
+                ctx.save = function () {
+                    savedTransforms.push(xform.translate(0, 0));
+                    return save.call(ctx);
+                };
+
+                const restore = ctx.restore;
+                ctx.restore = function () {
+                    xform = savedTransforms.pop();
+                    return restore.call(ctx);
+                };
+
+                const scale = ctx.scale;
+                ctx.scale = function (sx, sy) {
+                    xform = xform.scaleNonUniform(sx, sy);
+                    return scale.call(ctx, sx, sy);
+                };
+
+                const rotate = ctx.rotate;
+                ctx.rotate = function (radians) {
+                    xform = xform.rotate(radians * 180 / Math.PI);
+                    return rotate.call(ctx, radians);
+                };
+
+                const translate = ctx.translate;
+                ctx.translate = function (dx, dy) {
+                    xform = xform.translate(dx, dy);
+                    return translate.call(ctx, dx, dy);
+                };
+
+                const transform = ctx.transform;
+                ctx.transform = function (a, b, c, d, e, f) {
+                    const m2 = svg.createSVGMatrix();
+                    m2.a = a; m2.b = b; m2.c = c; m2.d = d; m2.e = e; m2.f = f;
+                    xform = xform.multiply(m2);
+                    return transform.call(ctx, a, b, c, d, e, f);
+                };
+
+                const setTransform = ctx.setTransform;
+                ctx.setTransform = function (a, b, c, d, e, f) {
+                    xform.a = a;
+                    xform.b = b;
+                    xform.c = c;
+                    xform.d = d;
+                    xform.e = e;
+                    xform.f = f;
+                    return setTransform.call(ctx, a, b, c, d, e, f);
+                };
+
+                const pt = svg.createSVGPoint();
+                ctx.transformedPoint = function (x, y) {
+                    pt.x = x; pt.y = y;
+                    return pt.matrixTransform(xform.inverse());
+                }
+            }
+        })();
+    </script>
+</body>
+
+</html>
