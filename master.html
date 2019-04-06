@@ -26,17 +26,6 @@
     <script src='https://cdnjs.cloudflare.com/ajax/libs/simple-peer/9.3.0/simplepeer.min.js'></script>
     <script>
         (function () {
-            function guid() {
-                function s4() {
-                    return Math.floor((1 + Math.random()) * 0x10000)
-                        .toString(16)
-                        .substring(1);
-                }
-
-                return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
-                    s4() + '-' + s4() + s4() + s4();
-            }
-
             const map = JSON.parse(localStorage.getItem(window.location.hash.split("#")[1]));
             console.log(map);
 
@@ -283,7 +272,17 @@
                 fowCanvas.height = map_image.height;
                 fowCanvas.width = map_image.width;
 
-                fowCtx.fillRect(0, 0, fowCanvas.width, fowCanvas.height);
+                if (map.fow) {
+                    const fow = new Image();
+
+                    fow.addEventListener('load', () => {
+                        fowCtx.drawImage(fow, 0, 0);
+                    }, false);
+
+                    fow.src = map.fow;
+                } else {
+                    fowCtx.fillRect(0, 0, fowCanvas.width, fowCanvas.height);
+                }
 
                 function resize() {
                     const transform = ctx.getTransform();
@@ -308,6 +307,12 @@
 
                     draw();
                     resize();
+
+                    window.addEventListener("unload", (evt) => {
+                        map.fow = fowCanvas.toDataURL();
+
+                        window.localStorage.setItem(map.id, JSON.stringify(map));
+                    });
                 }, false);
 
                 window.addEventListener('resize', resize, false);
