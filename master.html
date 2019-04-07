@@ -26,9 +26,14 @@
     <script src='https://cdnjs.cloudflare.com/ajax/libs/simple-peer/9.3.0/simplepeer.min.js'></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.7.3/localforage.nopromises.min.js"></script>
     <script>
-        localforage.getItem(window.location.hash.split("#")[1], (_, map) => {
+        const id = window.location.hash.split("#")[1];
+
+        Promise.all([
+            localforage.getItem(`image.${id}`),
+            localforage.getItem(`fow.${id}`),
+        ]).then(([imageDataUrl, fow]) => {
             const drone = new Scaledrone('IN4foXiellAoPcJn');
-            const room = drone.subscribe(map.id);
+            const room = drone.subscribe(id);
             const outgoing = {};
 
             room.on('open', error => {
@@ -48,9 +53,9 @@
 
                     outgoing[msg.id].on('signal', signal => {
                         drone.publish({
-                            room: map.id,
+                            room: id,
                             message: {
-                                id: map.id,
+                                id: id,
                                 to: msg.id,
                                 signal: signal,
                                 channel: "signal",
@@ -74,7 +79,7 @@
             }
 
             room.on('message', message => {
-                if (message.data.id != map.id) {
+                if (message.data.id != id) {
                     (messageHandlers[message.data.channel] || (() => { }))(message.data);
                 }
             });
@@ -269,23 +274,22 @@
                 fowCanvas.height = map_image.height;
                 fowCanvas.width = map_image.width;
 
-                if (map.fow) {
-                    const fow = new Image();
+                onCtx(ctx => trackTransforms(ctx));
 
-                    fow.addEventListener("load", () => {
-                        fowCtx.drawImage(fow, 0, 0);
+                fowCtx.fillRect(0, 0, fowCanvas.width, fowCanvas.height);
+                resize();
+
+                if (fow) {
+                    const image = new Image();
+
+                    image.addEventListener('load', () => {
+                        fowCtx.clearRect(0, 0, fowCanvas.width, fowCanvas.height);
+                        fowCtx.drawImage(image, 0, 0);
                         draw();
                     }, false);
 
-                    fow.src = map.fow;
-                } else {
-                    fowCtx.fillRect(0, 0, fowCanvas.width, fowCanvas.height);
+                    image.src = fow;
                 }
-
-                onCtx(ctx => trackTransforms(ctx));
-
-                draw();
-                resize();
 
                 function resize() {
                     const transform = ctx.getTransform();
@@ -305,12 +309,13 @@
                     draw();
                 }
 
-                // setInterval(() => {
-                //     map.fow = fowCanvas.toDataURL();
+                const saveWorker = new Worker("imageSave.js");
 
-                //     localforage.setItem(map.id, map, () => { });
-                // }, 2000);
-
+                window.addEventListener('beforeunload', () => {
+                    // const fowImage = fowCtx.getImageData(0, 0, fowCanvas.width, fowCanvas.height);
+                    // saveWorker.postMessage([id, fowImage.data.buffer, fowImage.width, fowCanvas.height], [fowImage.data.buffer]);
+                    saveWorker.postMessage([id, fowCanvas.toDataURL()]);
+                }, false);
 
                 window.addEventListener('resize', resize, false);
 
@@ -332,21 +337,21 @@
                             break;
                         case 67:
                             const el = document.createElement('textarea');
-                            el.value = `https://regiontog.github.io/dmap/client#${map.id}`;
+                            el.value = `https://regiontog.github.io/dmap/client#${id}`;
                             document.body.appendChild(el);
                             el.select();
                             document.execCommand('copy');
                             document.body.removeChild(el);
                             break;
                         case 79:
-                            window.open(`https://regiontog.github.io/dmap/client#${map.id}`)
+                            window.open(`https://regiontog.github.io/dmap/client#${id}`)
                             break;
                     }
 
                 }, false);
             });
 
-            map_image.src = map.image;
+            map_image.src = imageDataUrl;
 
             // Adds ctx.getTransform() - returns an SVGMatrix
             // Adds ctx.transformedPoint(x,y) - returns an SVGPoint
@@ -411,7 +416,7 @@
                     return pt.matrixTransform(xform.inverse());
                 }
             }
-        });
+        }).catch(console.error);
     </script>
 </body>
 

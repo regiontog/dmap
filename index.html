@@ -34,6 +34,8 @@
         const form = document.getElementById("form");
 
         localforage.getItem("maps").then(maps => {
+            maps = maps || [];
+
             form.addEventListener('submit', evt => {
                 const file = document.getElementById("file").files[0];
                 const reader = new FileReader();
@@ -44,9 +46,9 @@
 
                     Promise.all([
                         localforage.setItem("maps", maps),
-                        localforage.setItem(`image.${id}`, reader.result)
+                        localforage.setItem(`image.${id}`, reader.result),
                     ]).then(() => {
-                        window.location.href = `master#${map.id}`;
+                        window.location.href = `master#${id}`;
                     }).catch(console.error);
 
                 }, false);
