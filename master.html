@@ -158,21 +158,18 @@
                 constructor(erase) {
                     super();
 
+                    canvas.style.cursor = "auto";
+
                     this.erase = erase;
-
-
                     this.queue = [];
+
                     setInterval(() => this.tick(), 20);
                 }
 
                 on_down(evt) {
                     super.on_down(evt);
 
-                    fowCtx.beginPath();
-
-                    canvas.style.cursor = "auto";
                     fowCtx.lineWidth = 40;
-
                     fowCtx.lineCap = "round";
                     fowCtx.lineJoin = "round";
 
@@ -181,6 +178,8 @@
                     } else {
                         fowCtx.globalCompositeOperation = "source-over";
                     }
+
+                    fowCtx.beginPath();
                 }
 
                 on_up(evt) {
