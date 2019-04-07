@@ -33,26 +33,28 @@
 
         const form = document.getElementById("form");
 
-        form.addEventListener('submit', evt => {
-            const file = document.getElementById("file").files[0];
-            const reader = new FileReader();
+        localforage.getItem("maps").then(maps => {
+            form.addEventListener('submit', evt => {
+                const file = document.getElementById("file").files[0];
+                const reader = new FileReader();
 
-            reader.addEventListener("load", () => {
-                const map = {
-                    id: guid(),
-                    image: reader.result,
-                }
+                reader.addEventListener("load", () => {
+                    const id = guid();
+                    maps.push(id);
 
-                localforage.setItem(map.id, map, () => {
-                    window.location.href = `master#${map.id}`;
-                });
+                    Promise.all([
+                        localforage.setItem("maps", maps),
+                        localforage.setItem(`image.${id}`, reader.result)
+                    ]).then(() => {
+                        window.location.href = `master#${map.id}`;
+                    }).catch(console.error);
 
-                image.src = reader.result;
+                }, false);
+
+                reader.readAsDataURL(file);
+
+                return evt.preventDefault();
             }, false);
-
-            reader.readAsDataURL(file);
-
-            return evt.preventDefault();
-        }, false);
+        }).catch(console.error);
     </script>
 </body>
