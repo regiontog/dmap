@@ -10,14 +10,63 @@
 </head>
 
 <style>
+    #file {
+        width: 692px;
+        height: 120px;
+        border: 4px dashed #cdcdcd;
+
+        text-align: center;
+        padding-top: 100px;
+        font: Arial;
+    }
+
+    ul {
+        list-style-type: none;
+        padding: 0;
+        width: 700px;
+    }
+
+    ul li {
+        border: 1px solid #ddd;
+        margin-top: -1px;
+        background-color: #f6f6f6;
+        text-decoration: none;
+        font-size: 18px;
+        color: black;
+        display: block;
+        position: relative;
+    }
+
+    ul li:hover {
+        background-color: #eee;
+    }
+
+    a {
+        padding: 12px;
+        display: block;
+        text-decoration: none;
+        text-decoration-color: auto;
+    }
+
+    span {
+        cursor: pointer;
+        position: absolute;
+        top: 50%;
+        right: 0%;
+        padding: 12px 16px;
+        transform: translate(0%, -50%);
+    }
+
+    span:hover {
+        background: #bbb;
+    }
 </style>
 
 <body>
-    <img id="mapPreview">
-    <form id="form">
-        <input id="file" type="file" value="Browse" id="file" required accept="image/*">
-        <input type="submit" value="Create map">
-    </form>
+    <ul id="maps"></ul>
+
+    <div id="file">Drop map here or click to upload</div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.7.3/localforage.nopromises.min.js"></script>
     <script>
         function guid() {
@@ -31,32 +80,118 @@
                 s4() + '-' + s4() + s4() + s4();
         }
 
-        const form = document.getElementById("form");
+        const dropZone = document.getElementById("file");
+        const list = document.getElementById("maps");
 
         localforage.getItem("maps").then(maps => {
-            maps = maps || [];
+            function addMap(map) {
+                const li = document.createElement("li");
+                const a = document.createElement("a");
+                const span = document.createElement("span");
 
-            form.addEventListener('submit', evt => {
-                const file = document.getElementById("file").files[0];
-                const reader = new FileReader();
+                a.innerHTML = map.name;
+                a.href = `master#${map.id}`;
 
-                reader.addEventListener("load", () => {
-                    const id = guid();
-                    maps.push(id);
+                span.innerHTML = "×";
 
-                    Promise.all([
-                        localforage.setItem("maps", maps),
-                        localforage.setItem(`image.${id}`, reader.result),
-                    ]).then(() => {
-                        window.location.href = `master#${id}`;
-                    }).catch(console.error);
+                span.addEventListener('click', () => {
+                    const i = maps.indexOf(map);
+                    maps.splice(i, 1);
+
+                    localforage.setItem("maps", maps).then(() => {
+                        list.removeChild(li);
+
+                        localforage.removeItem(`config.${map.id}`);
+                        localforage.removeItem(`image.${map.id}`);
+                        localforage.removeItem(`fow.${map.id}`);
+                    }).catch(e => {
+                        console.error(e);
+                        maps.push(map);
+                    });
 
                 }, false);
 
-                reader.readAsDataURL(file);
+                li.appendChild(a);
+                li.appendChild(span);
+                list.appendChild(li);
+            }
+
+            function gotFile(file) {
+                const name = prompt("Name?");
+
+                console.log(name);
+
+                if (name != null) {
+                    const reader = new FileReader();
+
+                    reader.addEventListener("load", () => {
+                        const id = guid();
+                        maps.push({ id: id, name: name || id });
+
+                        Promise.all([
+                            localforage.setItem("maps", maps),
+                            localforage.setItem(`image.${id}`, reader.result),
+                        ]).then(() => {
+                            addMap({ id: id, name: name });
+                        }).catch(console.error);
+
+                    }, false);
+
+                    reader.readAsDataURL(file);
+                }
+            }
+
+            dropZone.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+
+                input.addEventListener('change', evt => {
+                    gotFile(evt.target.files[0]);
+                }, false);
+
+                input.click();
+            }, false);
+
+            maps = maps || [];
+
+            for (let map of maps) {
+                addMap(map);
+            }
+
+            function preventDefault(evt) {
+                return evt.preventDefault();
+            }
+
+            dropZone.addEventListener('dragenter', preventDefault, false);
+            dropZone.addEventListener('dragover', preventDefault, false);
+            dropZone.addEventListener('drop', evt => {
+                gotFile(evt.dataTransfer.files[0]);
 
                 return evt.preventDefault();
             }, false);
+
+            // form.addEventListener('submit', evt => {
+            //     const file = document.getElementById("file").files[0];
+            //     const reader = new FileReader();
+
+            //     reader.addEventListener("load", () => {
+            //         const id = guid();
+            //         maps.push(id);
+
+            //         Promise.all([
+            //             localforage.setItem("maps", maps),
+            //             localforage.setItem(`image.${id}`, reader.result),
+            //         ]).then(() => {
+            //             window.location.href = `master#${id}`;
+            //         }).catch(console.error);
+
+            //     }, false);
+
+            //     reader.readAsDataURL(file);
+
+            //     return evt.preventDefault();
+            // }, false);
         }).catch(console.error);
     </script>
 </body>
