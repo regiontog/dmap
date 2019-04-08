@@ -26,12 +26,17 @@
     <script src='https://cdnjs.cloudflare.com/ajax/libs/simple-peer/9.3.0/simplepeer.min.js'></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.7.3/localforage.nopromises.min.js"></script>
     <script>
+        function transformToArray(transform) {
+            return [transform.a, transform.b, transform.c, transform.d, transform.e, transform.f]
+        }
+
         const id = window.location.hash.split("#")[1];
 
         Promise.all([
             localforage.getItem(`image.${id}`),
             localforage.getItem(`fow.${id}`),
-        ]).then(([imageDataUrl, fow]) => {
+            localforage.getItem(`config.${id}`),
+        ]).then(([imageDataUrl, fow, config]) => {
             const drone = new Scaledrone('IN4foXiellAoPcJn');
             const room = drone.subscribe(id);
             const outgoing = {};
@@ -85,14 +90,28 @@
             });
 
             class ToolBase {
-                constructor() {
-                    this.last_x = canvas.width / 2;
-                    this.last_y = canvas.height / 2;
+                constructor(prev_tool, cursor_radius) {
+                    this.cursor = {
+                        radius: cursor_radius,
+                        draw_cursor: !!cursor_radius,
+                    };
+
+                    if (prev_tool) {
+                        this.last_x = prev_tool.last_x;
+                        this.last_y = prev_tool.last_y;
+                    } else {
+                        this.last_x = canvas.width / 2;
+                        this.last_y = canvas.height / 2;
+                    }
                 }
 
                 on_move(evt) {
                     this.last_x = evt.offsetX || (evt.pageX - canvas.offsetLeft);
                     this.last_y = evt.offsetY || (evt.pageY - canvas.offsetTop);
+
+                    if (this.cursor.draw_cursor) {
+                        draw_local();
+                    }
                 }
 
                 on_down(evt) {
@@ -106,8 +125,8 @@
             }
 
             class DragTool extends ToolBase {
-                constructor() {
-                    super();
+                constructor(...params) {
+                    super(...params);
 
                     this.drag_start = null;
                 }
@@ -130,8 +149,8 @@
             }
 
             class MoveTool extends DragTool {
-                constructor() {
-                    super();
+                constructor(prev_tool) {
+                    super(prev_tool);
 
                     canvas.style.cursor = "move";
                 }
@@ -144,8 +163,8 @@
 
                 on_wheel(evt) {
                     const scale = Math.pow(scaleFactor, evt.deltaY / -Math.abs(evt.deltaY));
-
                     const pt = ctx.transformedPoint(this.last_x, this.last_y);
+
                     onCtx(ctx => {
                         ctx.translate(pt.x, pt.y);
 
@@ -160,10 +179,10 @@
             }
 
             class FowTool extends DragTool {
-                constructor(erase) {
-                    super();
+                constructor(prev_tool, erase) {
+                    super(prev_tool, config.drawWidth / 2);
 
-                    canvas.style.cursor = "auto";
+                    canvas.style.cursor = "none";
 
                     this.erase = erase;
                     this.queue = [];
@@ -171,10 +190,26 @@
                     setInterval(() => this.tick(), 20);
                 }
 
+                on_wheel(evt) {
+                    super.on_wheel(evt);
+
+                    config.drawWidth += evt.deltaY;
+
+                    if (config.drawWidth < 1) {
+                        config.drawWidth = 1;
+                    }
+
+                    this.cursor.radius = config.drawWidth / 2;
+
+                    draw_local();
+
+                    return evt.preventDefault();
+                }
+
                 on_down(evt) {
                     super.on_down(evt);
 
-                    fowCtx.lineWidth = 40;
+                    fowCtx.lineWidth = config.drawWidth;
                     fowCtx.lineCap = "round";
                     fowCtx.lineJoin = "round";
 
@@ -238,14 +273,17 @@
 
             let imageOffsetX, imageOffsetY, imageScale;
 
-            let tool = new MoveTool();
+            config = config || {
+                drawWidth: 40,
+                transform: [1, 0, 0, 1, 0, 0],
+            }
 
             function onCtx(fn) {
                 fn(ctx);
                 fn(offScreenCtx);
             }
 
-            function draw() {
+            function draw_local() {
                 ctx.save();
                 ctx.setTransform(1, 0, 0, 1, 0, 0);
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -256,6 +294,22 @@
                 ctx.globalAlpha = 0.5;
                 ctx.drawImage(fowCanvas, imageOffsetX, imageOffsetY, map_image.width * imageScale, map_image.height * imageScale);
                 ctx.globalAlpha = 1;
+
+                if (tool.cursor.draw_cursor) {
+                    ctx.beginPath();
+
+                    const pt = ctx.transformedPoint(tool.last_x, tool.last_y);
+
+                    ctx.lineWidth = 0.4;
+                    ctx.strokeStyle = "white";
+                    ctx.arc(pt.x, pt.y, (tool.cursor.radius - ctx.lineWidth) * imageScale, 0, Math.PI * 2);
+
+                    ctx.stroke();
+                }
+            }
+
+            function draw() {
+                draw_local();
 
                 offScreenCtx.save();
                 offScreenCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -271,13 +325,17 @@
             map_image.addEventListener("load", () => {
                 console.debug("Setting event handlers.");
 
+                tool = new MoveTool();
+
                 fowCanvas.height = map_image.height;
                 fowCanvas.width = map_image.width;
 
                 onCtx(ctx => trackTransforms(ctx));
 
                 fowCtx.fillRect(0, 0, fowCanvas.width, fowCanvas.height);
+
                 resize();
+                onCtx(ctx => ctx.setTransform(...config.transform));
 
                 if (fow) {
                     const image = new Image();
@@ -312,9 +370,9 @@
                 const saveWorker = new Worker("imageSave.js");
 
                 window.addEventListener('beforeunload', () => {
-                    // const fowImage = fowCtx.getImageData(0, 0, fowCanvas.width, fowCanvas.height);
-                    // saveWorker.postMessage([id, fowImage.data.buffer, fowImage.width, fowCanvas.height], [fowImage.data.buffer]);
-                    saveWorker.postMessage([id, fowCanvas.toDataURL()]);
+                    config.transform = transformToArray(ctx.getTransform());
+
+                    saveWorker.postMessage([id, config, fowCanvas.toDataURL()]);
                 }, false);
 
                 window.addEventListener('resize', resize, false);
@@ -327,13 +385,16 @@
                 window.addEventListener("keydown", evt => {
                     switch (evt.which) {
                         case 32:
-                            tool = new MoveTool();
+                            tool = new MoveTool(tool);
+                            draw_local();
                             break;
                         case 68:
-                            tool = new FowTool(false);
+                            tool = new FowTool(tool, false);
+                            draw_local();
                             break;
                         case 83:
-                            tool = new FowTool(true);
+                            tool = new FowTool(tool, true);
+                            draw_local();
                             break;
                         case 67:
                             const el = document.createElement('textarea');

@@ -2,10 +2,13 @@ importScripts('https://cdnjs.cloudflare.com/ajax/libs/localforage/1.7.3/localfor
 
 
 onmessage = evt => {
-    const [id, image] = evt.data;
+    const [id, config, image] = evt.data;
     console.debug('Save message received.');
 
-    localforage.setItem(`fow.${id}`, image).then(() => {
+    Promise.all([
+        localforage.setItem(`fow.${id}`, image),
+        localforage.setItem(`config.${id}`, config),
+    ]).then(() => {
         console.log('Saved!');
         close();
     }).catch(console.error);
