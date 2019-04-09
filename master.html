@@ -132,6 +132,10 @@
 
                     if (this.drag_start) {
                         this.drag_to(ctx.transformedPoint(this.last_x, this.last_y));
+                    } else {
+                        if (this.cursor.draw_cursor) {
+                            draw_local();
+                        }
                     }
                 }
 
@@ -181,9 +185,6 @@
                     canvas.style.cursor = "none";
 
                     this.erase = erase;
-                    this.queue = [];
-
-                    setInterval(() => this.tick(), 20);
                 }
 
                 on_wheel(evt) {
@@ -215,7 +216,10 @@
                         fowCtx.globalCompositeOperation = "source-over";
                     }
 
+                    const pt = ctx.transformedPoint(this.last_x, this.last_y);
+
                     fowCtx.beginPath();
+                    fowCtx.moveTo((pt.x - imageOffsetX) / imageScale, (pt.y - imageOffsetY) / imageScale);
                 }
 
                 on_up(evt) {
@@ -229,33 +233,11 @@
                     draw();
                 }
 
-                tick() {
-                    const len = this.queue.length;
-
-                    if (len > 0) {
-                        const avg = { x: 0, y: 0 };
-
-                        for (let point of this.queue.splice(0)) {
-                            avg.x += point.x;
-                            avg.y += point.y;
-                        }
-
-                        avg.x /= len;
-                        avg.y /= len;
-
-                        fowCtx.lineTo((avg.x - imageOffsetX) / imageScale, (avg.y - imageOffsetY) / imageScale);
-                        fowCtx.stroke();
-
-                        draw();
-                    } else {
-                        if (this.cursor.draw_cursor) {
-                            draw_local();
-                        }
-                    }
-                }
-
                 drag_to(pt) {
-                    this.queue.push(pt);
+                    fowCtx.lineTo((pt.x - imageOffsetX) / imageScale, (pt.y - imageOffsetY) / imageScale);
+                    fowCtx.stroke();
+
+                    draw();
                 }
             }
 
