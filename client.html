@@ -21,7 +21,7 @@
 </style>
 
 <body>
-    <video id="video" width="100%" height="100%" controls>
+    <video id="video" width="100%" height="100%" autoplay>
         Your browser does not support the video tag.
     </video>
     <script src='https://cdn.scaledrone.com/scaledrone-lite.min.js'></script>
@@ -45,16 +45,19 @@
             const room = drone.subscribe(roomName);
 
             let incoming;
+            let id;
             let connected = false;
 
             const video = document.getElementById('video');
+
             video.addEventListener('play', () => {
                 if (connected) {
-                    incoming.send(0);
+                    setTimeout(() => {
+                        console.debug("Requesting frame");
+                        incoming.send(0);
+                    }, 1000);
                 }
             }, false);
-
-            const id = guid();
 
             room.on('open', error => {
                 if (error) {
@@ -64,6 +67,8 @@
                 console.debug("Connected to signal room");
 
                 function tryFind() {
+                    id = guid();
+
                     incoming = new SimplePeer({
                         initiator: false,
                         config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
@@ -84,22 +89,25 @@
                         console.log("Connected to peer!");
                         connected = true;
 
-                        if (video.paused) {
-                            video.play();
-                        } else {
-                            incoming.send(0);
-                        }
-
                         clearInterval(tryFindPeer);
                     });
 
                     incoming.on('close', () => {
                         connected = false;
+                        clearInterval(tryFindPeer);
                         tryFindPeer = setInterval(tryFind, 10000);
+                        tryFind();
                     });
 
                     incoming.on('stream', stream => {
                         video.srcObject = stream;
+
+                        video.muted = true;
+                        video.play();
+                    });
+
+                    incoming.on('error', err => {
+                        console.error(err);
                     });
 
                     drone.publish({
@@ -116,10 +124,17 @@
 
                 const messageHandlers = {
                     signal: msg => {
-                        if (msg.to == id) {
+                        if (msg.to == id && !incoming.destroyed) {
                             incoming.signal(msg.signal);
                         }
                     },
+                    broadcast: msg => {
+                        if (!connected) {
+                            clearInterval(tryFindPeer);
+                            tryFindPeer = setInterval(tryFind, 10000);
+                            tryFind();
+                        }
+                    }
                 }
 
                 room.on('message', message => {

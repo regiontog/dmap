@@ -47,39 +47,59 @@
                 }
 
                 console.debug("Connected to signal room");
+
+                drone.publish({
+                    room: id,
+                    message: {
+                        id: id,
+                        channel: "broadcast",
+                    }
+                });
             });
 
             const messageHandlers = {
                 reqstream: msg => {
-                    outgoing[msg.id] = new SimplePeer({
-                        initiator: true,
-                        config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
-                    });
-
-                    outgoing[msg.id].on('signal', signal => {
-                        drone.publish({
-                            room: id,
-                            message: {
-                                id: id,
-                                to: msg.id,
-                                signal: signal,
-                                channel: "signal",
-                            }
+                    if (!outgoing[msg.id]) {
+                        outgoing[msg.id] = new SimplePeer({
+                            initiator: true,
+                            config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
                         });
-                    });
 
-                    outgoing[msg.id].addStream(stream);
-                    outgoing[msg.id].on('data', () => {
-                        // Force frame to clients
-                        draw();
-                    });
+                        outgoing[msg.id].on('signal', signal => {
+                            drone.publish({
+                                room: id,
+                                message: {
+                                    id: id,
+                                    to: msg.id,
+                                    signal: signal,
+                                    channel: "signal",
+                                }
+                            });
+                        });
 
-                    outgoing[msg.id].on('close', () => {
-                        delete outgoing[msg.id];
-                    });
+                        outgoing[msg.id].on('data', () => {
+                            // Force frame to clients
+                            draw();
+                        });
+
+                        outgoing[msg.id].on('connect', () => {
+                            outgoing[msg.id].addStream(stream);
+                        });
+
+                        outgoing[msg.id].on('close', () => {
+                            outgoing[msg.id].destroy();
+                            delete outgoing[msg.id];
+                        });
+
+                        outgoing[msg.id].on('error', err => {
+                            console.error(err);
+                        });
+                    }
                 },
                 signal: msg => {
-                    outgoing[msg.id].signal(msg.signal);
+                    if (outgoing[msg.id]) {
+                        outgoing[msg.id].signal(msg.signal);
+                    }
                 },
             }
 
