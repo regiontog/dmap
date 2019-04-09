@@ -141,18 +141,6 @@
                 }
             }
 
-            dropZone.addEventListener('click', () => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-
-                input.addEventListener('change', evt => {
-                    gotFile(evt.target.files[0]);
-                }, false);
-
-                input.click();
-            }, false);
-
             maps = maps || [];
 
             for (let map of maps) {
@@ -165,33 +153,24 @@
 
             dropZone.addEventListener('dragenter', preventDefault, false);
             dropZone.addEventListener('dragover', preventDefault, false);
+
             dropZone.addEventListener('drop', evt => {
                 gotFile(evt.dataTransfer.files[0]);
 
                 return evt.preventDefault();
             }, false);
 
-            // form.addEventListener('submit', evt => {
-            //     const file = document.getElementById("file").files[0];
-            //     const reader = new FileReader();
+            dropZone.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
 
-            //     reader.addEventListener("load", () => {
-            //         const id = guid();
-            //         maps.push(id);
+                input.addEventListener('change', evt => {
+                    gotFile(evt.target.files[0]);
+                }, false);
 
-            //         Promise.all([
-            //             localforage.setItem("maps", maps),
-            //             localforage.setItem(`image.${id}`, reader.result),
-            //         ]).then(() => {
-            //             window.location.href = `master#${id}`;
-            //         }).catch(console.error);
-
-            //     }, false);
-
-            //     reader.readAsDataURL(file);
-
-            //     return evt.preventDefault();
-            // }, false);
+                input.click();
+            }, false);
         }).catch(console.error);
     </script>
 </body>

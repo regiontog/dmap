@@ -108,10 +108,6 @@
                 on_move(evt) {
                     this.last_x = evt.offsetX || (evt.pageX - canvas.offsetLeft);
                     this.last_y = evt.offsetY || (evt.pageY - canvas.offsetTop);
-
-                    if (this.cursor.draw_cursor) {
-                        draw_local();
-                    }
                 }
 
                 on_down(evt) {
@@ -228,8 +224,8 @@
 
                     const pt = ctx.transformedPoint(this.last_x, this.last_y);
                     fowCtx.lineTo((pt.x - imageOffsetX) / imageScale, (pt.y - imageOffsetY) / imageScale);
-
                     fowCtx.stroke();
+
                     draw();
                 }
 
@@ -251,6 +247,10 @@
                         fowCtx.stroke();
 
                         draw();
+                    } else {
+                        if (this.cursor.draw_cursor) {
+                            draw_local();
+                        }
                     }
                 }
 
