@@ -110,11 +110,8 @@
             });
 
             class ToolBase {
-                constructor(prev_tool, cursor_radius) {
-                    this.cursor = {
-                        radius: cursor_radius,
-                        draw_cursor: !!cursor_radius,
-                    };
+                constructor(prev_tool, cursor) {
+                    this.has_custom_cursor = !!cursor;
 
                     if (prev_tool) {
                         this.last_x = prev_tool.last_x;
@@ -128,6 +125,13 @@
                 on_move(evt) {
                     this.last_x = evt.offsetX || (evt.pageX - canvas.offsetLeft);
                     this.last_y = evt.offsetY || (evt.pageY - canvas.offsetTop);
+
+                    if (this.has_custom_cursor) {
+                        draw_local();
+                    }
+                }
+
+                draw_cursor() {
                 }
 
                 on_down(evt) {
@@ -152,10 +156,6 @@
 
                     if (this.drag_start) {
                         this.drag_to(ctx.transformedPoint(this.last_x, this.last_y));
-                    } else {
-                        if (this.cursor.draw_cursor) {
-                            draw_local();
-                        }
                     }
                 }
 
@@ -182,43 +182,224 @@
                 }
 
                 on_wheel(evt) {
-                    const scale = Math.pow(scaleFactor, evt.deltaY / -Math.abs(evt.deltaY));
-                    const pt = ctx.transformedPoint(this.last_x, this.last_y);
+                    if (Number.isFinite(evt.deltaY) && evt.deltaY != 0) {
+                        const scale = Math.pow(scaleFactor, evt.deltaY / -Math.abs(evt.deltaY));
+                        const pt = ctx.transformedPoint(this.last_x, this.last_y);
 
-                    onCtx(ctx => {
-                        ctx.translate(pt.x, pt.y);
+                        onCtx(ctx => {
+                            ctx.translate(pt.x, pt.y);
 
-                        ctx.scale(scale, scale);
-                        ctx.translate(-pt.x, -pt.y);
-                    });
+                            ctx.scale(scale, scale);
+                            ctx.translate(-pt.x, -pt.y);
+                        });
 
-                    draw();
+                        draw();
+                    }
 
                     return evt.preventDefault();
                 }
             }
 
-            class FowTool extends DragTool {
-                constructor(prev_tool, erase) {
-                    super(prev_tool, config.drawWidth / 2);
+            class GridTool extends ToolBase {
+                constructor(prev_tool) {
+                    super(prev_tool, true);
+
+                    canvas.style.cursor = "crosshair";
+
+                    this.from = null;
+                }
+
+                static get_in_grid(point) {
+                    if (!config.grid) {
+                        return null;
+                    }
+
+                    const x = (point.x - imageOffsetX) / imageScale;
+                    const y = (point.y - imageOffsetY) / imageScale;
+
+                    return {
+                        x: Math.floor((x - config.grid.offset.x) / config.grid.pixlesPer5Feet) * config.grid.pixlesPer5Feet + config.grid.offset.x,
+                        y: Math.floor((y - config.grid.offset.y) / config.grid.pixlesPer5Feet) * config.grid.pixlesPer5Feet + config.grid.offset.y,
+                        width: config.grid.pixlesPer5Feet,
+                        height: config.grid.pixlesPer5Feet,
+                    }
+                }
+
+                draw_cursor() {
+                    if (this.from) {
+                        const here = ctx.transformedPoint(this.last_x, this.last_y);
+
+                        ctx.lineWidth = 0.4;
+                        ctx.strokeStyle = "white";
+
+                        ctx.beginPath();
+                        ctx.moveTo(this.from.x, this.from.y);
+                        ctx.lineTo(here.x, here.y);
+                        ctx.stroke();
+                    }
+                }
+
+                set_grid_offset(point) {
+                    if (config.grid) {
+
+                        const x = point.x - imageOffsetX;
+                        const y = point.y - imageOffsetY;
+
+                        config.grid.offset = {
+                            x: (x / imageScale) % config.grid.pixlesPer5Feet,
+                            y: (y / imageScale) % config.grid.pixlesPer5Feet,
+                        }
+                    }
+                }
+
+                on_down(evt) {
+                    super.on_down(evt);
+
+                    if (evt.button == 2) {
+                        this.set_grid_offset(ctx.transformedPoint(this.last_x, this.last_y));
+
+                        draw_image();
+                        draw();
+
+                        return evt.preventDefault();
+                    }
+
+                    if (this.from) {
+                        // Do something with the coordinates.
+
+                        let distance;
+                        let unit;
+
+
+                        while (!distance) {
+                            distance = prompt("Enter distance:");
+
+                            const match = distance.match(/([1-9][0-9]*)(m|f|km)?/);
+
+                            if (!match) {
+                                distance = null;
+                                continue;
+                            }
+
+                            distance = match[1];
+                            unit = match[2] || "m";
+                        }
+
+                        distance = Number(distance);
+
+                        switch (unit) {
+                            case "m": break;
+                            case "km":
+                                distance = distance * 1000;
+                                break;
+                            case "f":
+                                distance = distance * 0.3048;
+                                break;
+                        }
+
+                        const here = ctx.transformedPoint(this.last_x, this.last_y);
+                        const pixles = Math.sqrt(Math.pow(this.from.x - here.x, 2) + Math.pow(this.from.y - here.y, 2));
+
+                        const gridIntoDist = distance / 1.524;
+                        const pixlesPer5Feet = pixles / gridIntoDist;
+
+                        config.grid = {
+                            pixlesPer5Feet: pixlesPer5Feet / imageScale,
+                            offset: { x: 0, y: 0 },
+                        }
+
+                        this.set_grid_offset(this.from);
+
+                        draw_image();
+                        draw();
+
+                        this.from = null;
+                    } else {
+                        this.from = ctx.transformedPoint(this.last_x, this.last_y);
+                    }
+
+                    draw_local();
+                }
+            }
+
+            class FowRectTool extends DragTool {
+                constructor(prev_tool) {
+                    super(prev_tool, false);
+
+                    canvas.style.cursor = "auto";
+
+                    this.current = null;
+                }
+
+                set_current(point) {
+                    const grid = GridTool.get_in_grid(point);
+
+                    if (!this.current || (grid && !(this.current.x == grid.x && this.current.y == grid.y))) {
+                        this.current = grid;
+                        this.on_new_grid(grid);
+                    }
+                }
+
+                on_new_grid(grid) {
+                    fowCtx.fillRect(grid.x, grid.y, grid.width, grid.height);
+                    draw();
+                }
+
+                on_down(evt) {
+                    super.on_down(evt);
+
+                    if (evt.button == 0) {
+                        fowCtx.globalCompositeOperation = "destination-out";
+                    } else if (evt.button == 2) {
+                        fowCtx.globalCompositeOperation = "source-over";
+                    }
+
+                    this.set_current(ctx.transformedPoint(this.last_x, this.last_y));
+
+                    return evt.preventDefault();
+                }
+
+                on_up(evt) {
+                    super.on_up(evt);
+
+                    this.set_current(ctx.transformedPoint(this.last_x, this.last_y));
+                }
+
+                drag_to(pt) {
+                    this.set_current(pt);
+                }
+            }
+
+            class FowCircleTool extends DragTool {
+                constructor(prev_tool) {
+                    super(prev_tool, true);
 
                     canvas.style.cursor = "none";
+                }
 
-                    this.erase = erase;
+                draw_cursor() {
+                    const pt = ctx.transformedPoint(this.last_x, this.last_y);
+
+                    ctx.lineWidth = 0.4;
+                    ctx.strokeStyle = "white";
+
+                    ctx.beginPath();
+                    ctx.arc(pt.x, pt.y, (config.drawWidth / 2 - ctx.lineWidth) * imageScale, 0, Math.PI * 2);
+                    ctx.stroke();
                 }
 
                 on_wheel(evt) {
                     super.on_wheel(evt);
 
-                    config.drawWidth += evt.deltaY;
+                    if (Number.isFinite(evt.deltaY) && evt.deltaY != 0) {
+                        config.drawWidth += 3 * evt.deltaY / Math.abs(evt.deltaY);
 
-                    if (config.drawWidth < 1) {
-                        config.drawWidth = 1;
+                        if (config.drawWidth < 1) {
+                            config.drawWidth = 1;
+                        }
+
+                        draw_local();
                     }
-
-                    this.cursor.radius = config.drawWidth / 2;
-
-                    draw_local();
 
                     return evt.preventDefault();
                 }
@@ -230,9 +411,9 @@
                     fowCtx.lineCap = "round";
                     fowCtx.lineJoin = "round";
 
-                    if (this.erase) {
+                    if (evt.button == 0) {
                         fowCtx.globalCompositeOperation = "destination-out";
-                    } else {
+                    } else if (evt.button == 2) {
                         fowCtx.globalCompositeOperation = "source-over";
                     }
 
@@ -240,11 +421,12 @@
 
                     fowCtx.beginPath();
                     fowCtx.moveTo((pt.x - imageOffsetX) / imageScale, (pt.y - imageOffsetY) / imageScale);
+
+                    return evt.preventDefault();
                 }
 
                 on_up(evt) {
                     super.on_up(evt);
-                    this.queue = [];
 
                     const pt = ctx.transformedPoint(this.last_x, this.last_y);
                     fowCtx.lineTo((pt.x - imageOffsetX) / imageScale, (pt.y - imageOffsetY) / imageScale);
@@ -264,10 +446,12 @@
             const fowCanvas = document.createElement('canvas');
             const offScreenCanvas = document.createElement('canvas');
             const canvas = document.getElementById('canvas');
+            const backgroundImg = document.createElement('canvas');
 
             const ctx = canvas.getContext('2d');
             const fowCtx = fowCanvas.getContext('2d');
             const offScreenCtx = offScreenCanvas.getContext('2d');
+            const backgroundImgCtx = backgroundImg.getContext('2d');
 
             const stream = offScreenCanvas.captureStream();
 
@@ -285,29 +469,42 @@
                 fn(offScreenCtx);
             }
 
+            function draw_image() {
+                backgroundImgCtx.drawImage(map_image, 0, 0, map_image.width * imageScale, map_image.height * imageScale);
+
+                if (config.grid) {
+                    backgroundImgCtx.beginPath();
+
+                    const num_v_lines = map_image.width / config.grid.pixlesPer5Feet;
+                    const num_h_lines = map_image.height / config.grid.pixlesPer5Feet;
+
+                    for (let i = 0; i < num_v_lines; i++) {
+                        backgroundImgCtx.moveTo((config.grid.offset.x + config.grid.pixlesPer5Feet * i) * imageScale, 0);
+                        backgroundImgCtx.lineTo((config.grid.offset.x + config.grid.pixlesPer5Feet * i) * imageScale, map_image.height * imageScale);
+                    }
+
+                    for (let i = 0; i < num_h_lines; i++) {
+                        backgroundImgCtx.moveTo(0, (config.grid.offset.y + config.grid.pixlesPer5Feet * i) * imageScale);
+                        backgroundImgCtx.lineTo(map_image.width * imageScale, (config.grid.offset.y + config.grid.pixlesPer5Feet * i) * imageScale);
+                    }
+
+                    backgroundImgCtx.stroke();
+                }
+            }
+
             function draw_local() {
                 ctx.save();
                 ctx.setTransform(1, 0, 0, 1, 0, 0);
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.restore();
 
-                ctx.drawImage(map_image, imageOffsetX, imageOffsetY, map_image.width * imageScale, map_image.height * imageScale);
+                ctx.drawImage(backgroundImg, imageOffsetX, imageOffsetY);
 
                 ctx.globalAlpha = 0.5;
                 ctx.drawImage(fowCanvas, imageOffsetX, imageOffsetY, map_image.width * imageScale, map_image.height * imageScale);
                 ctx.globalAlpha = 1;
 
-                if (tool.cursor.draw_cursor) {
-                    ctx.beginPath();
-
-                    const pt = ctx.transformedPoint(tool.last_x, tool.last_y);
-
-                    ctx.lineWidth = 0.4;
-                    ctx.strokeStyle = "white";
-                    ctx.arc(pt.x, pt.y, (tool.cursor.radius - ctx.lineWidth) * imageScale, 0, Math.PI * 2);
-
-                    ctx.stroke();
-                }
+                tool.draw_cursor();
             }
 
             function draw() {
@@ -318,7 +515,7 @@
                 offScreenCtx.fillRect(0, 0, canvas.width, canvas.height);
                 offScreenCtx.restore();
 
-                offScreenCtx.drawImage(map_image, imageOffsetX, imageOffsetY, map_image.width * imageScale, map_image.height * imageScale);
+                offScreenCtx.drawImage(backgroundImg, imageOffsetX, imageOffsetY);
                 offScreenCtx.drawImage(fowCanvas, imageOffsetX, imageOffsetY, map_image.width * imageScale, map_image.height * imageScale);
             }
 
@@ -362,6 +559,11 @@
 
                     imageScale = Math.min(canvas.width / map_image.width, canvas.height / map_image.height);
 
+                    backgroundImg.height = map_image.height * imageScale;
+                    backgroundImg.width = map_image.width * imageScale;
+
+                    draw_image();
+
                     imageOffsetX = (canvas.width / 2) - (map_image.width / 2) * imageScale;
                     imageOffsetY = (canvas.height / 2) - (map_image.height / 2) * imageScale;
 
@@ -383,6 +585,7 @@
                 canvas.addEventListener("mouseup", evt => tool.on_up(evt), false);
                 canvas.addEventListener("mousedown", evt => tool.on_down(evt), false);
                 canvas.addEventListener("mousemove", evt => tool.on_move(evt), false);
+                canvas.addEventListener("contextmenu", evt => evt.preventDefault(), false);
 
                 window.addEventListener("keydown", evt => {
                     switch (evt.which) {
@@ -390,12 +593,16 @@
                             tool = new MoveTool(tool);
                             draw_local();
                             break;
-                        case 68:
-                            tool = new FowTool(tool, false);
+                        case 83:
+                            tool = new FowCircleTool(tool);
                             draw_local();
                             break;
-                        case 83:
-                            tool = new FowTool(tool, true);
+                        case 82:
+                            tool = new FowRectTool(tool);
+                            draw_local();
+                            break;
+                        case 71:
+                            tool = new GridTool(tool);
                             draw_local();
                             break;
                         case 67:
