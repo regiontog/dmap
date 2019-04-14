@@ -209,6 +209,23 @@
                     this.from = null;
                 }
 
+                on_wheel(evt) {
+                    super.on_wheel(evt);
+
+                    if (config.grid && Number.isFinite(evt.deltaY) && evt.deltaY != 0) {
+                        config.grid.lineWidth += 0.1 * evt.deltaY / Math.abs(evt.deltaY);
+
+                        if (config.grid.lineWidth < 0.1) {
+                            config.grid.lineWidth = 0.1;
+                        }
+
+                        draw_image();
+                        draw();
+                    }
+
+                    return evt.preventDefault();
+                }
+
                 static get_in_grid(point) {
                     if (!config.grid) {
                         return null;
@@ -265,11 +282,8 @@
                     }
 
                     if (this.from) {
-                        // Do something with the coordinates.
-
                         let distance;
                         let unit;
-
 
                         while (!distance) {
                             distance = prompt("Enter distance:");
@@ -306,6 +320,8 @@
                         config.grid = {
                             pixlesPer5Feet: pixlesPer5Feet / imageScale,
                             offset: { x: 0, y: 0 },
+                            lineWidth: 1,
+                            visible: true,
                         }
 
                         this.set_grid_offset(this.from);
@@ -472,7 +488,8 @@
             function draw_image() {
                 backgroundImgCtx.drawImage(map_image, 0, 0, map_image.width * imageScale, map_image.height * imageScale);
 
-                if (config.grid) {
+                if (config.grid && config.grid.visible) {
+                    backgroundImgCtx.lineWidth = config.grid.lineWidth;
                     backgroundImgCtx.beginPath();
 
                     const num_v_lines = map_image.width / config.grid.pixlesPer5Feet;
