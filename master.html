@@ -605,24 +605,24 @@
                 canvas.addEventListener("contextmenu", evt => evt.preventDefault(), false);
 
                 window.addEventListener("keydown", evt => {
-                    switch (evt.which) {
-                        case 32:
+                    switch (evt.key) {
+                        case " ":
                             tool = new MoveTool(tool);
                             draw_local();
                             break;
-                        case 83:
+                        case "s":
                             tool = new FowCircleTool(tool);
                             draw_local();
                             break;
-                        case 82:
+                        case "r":
                             tool = new FowRectTool(tool);
                             draw_local();
                             break;
-                        case 71:
+                        case "g":
                             tool = new GridTool(tool);
                             draw_local();
                             break;
-                        case 67:
+                        case "c":
                             const el = document.createElement('textarea');
                             el.value = `https://regiontog.github.io/dmap/client#${id}`;
                             document.body.appendChild(el);
@@ -630,7 +630,7 @@
                             document.execCommand('copy');
                             document.body.removeChild(el);
                             break;
-                        case 79:
+                        case "o":
                             window.open(`https://regiontog.github.io/dmap/client#${id}`)
                             break;
                     }
