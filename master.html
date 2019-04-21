@@ -32,6 +32,24 @@
 
         const id = window.location.hash.split("#")[1];
 
+        function load_image(url) {
+            const promise = new Promise((resolve, reject) => {
+                const image = new Image();
+
+                image.addEventListener('load', () => {
+                    resolve(image);
+                });
+
+                image.addEventListener('error', e => {
+                    reject(e);
+                });
+
+                image.src = url;
+            });
+
+            return promise;
+        }
+
         Promise.all([
             localforage.getItem(`image.${id}`),
             localforage.getItem(`fow.${id}`),
@@ -40,6 +58,9 @@
             const drone = new Scaledrone('IN4foXiellAoPcJn');
             const room = drone.subscribe(id);
             const outgoing = {};
+
+            const tokens = [];
+
 
             room.on('open', error => {
                 if (error) {
@@ -165,6 +186,52 @@
 
                 on_up(evt) {
                     this.drag_start = null;
+                }
+            }
+
+            class TokenTool extends ToolBase {
+                constructor(prev_tool) {
+                    super(prev_tool);
+
+                    canvas.style.cursor = "grab";
+                    this.target = null;
+                }
+
+                on_down(evt) {
+                    const here = ctx.transformedPoint(this.last_x, this.last_y);
+
+                    if (config.grid) {
+                        if (this.target !== null) {
+                            const tile = GridTool.get_in_grid(here);
+
+                            config.tokens[this.target].x = tile.x;
+                            config.tokens[this.target].y = tile.y;
+
+                            tokens[this.target].x = tile.x;
+                            tokens[this.target].y = tile.y;
+
+                            draw_image();
+                            draw();
+
+                            this.target = null;
+                            canvas.style.cursor = "grab";
+                            return;
+                        }
+
+                        const x = (here.x - imageOffsetX) / imageScale;
+                        const y = (here.y - imageOffsetY) / imageScale;
+
+                        const x_neg = x - config.grid.pixlesPer5Feet;
+                        const y_neg = y - config.grid.pixlesPer5Feet;
+
+                        for (let i = 0; i < tokens.length; i++) {
+                            if (x > tokens[i].x && x_neg < tokens[i].x && y > tokens[i].y && y_neg < tokens[i].y) {
+                                this.target = i;
+                                canvas.style.cursor = "grabbing";
+                                break;
+                            }
+                        }
+                    }
                 }
             }
 
@@ -459,6 +526,23 @@
                 }
             }
 
+            function add_token(image) {
+                const reader = new FileReader();
+
+                reader.addEventListener("load", () => {
+                    config.tokens.push({ x: 0, y: 0, url: reader.result });
+
+                    load_image(reader.result).then(img => {
+                        tokens.push({ image: img, x: 0, y: 0 });
+
+                        draw_image();
+                        draw();
+                    });
+                }, false);
+
+                reader.readAsDataURL(image);
+            }
+
             const fowCanvas = document.createElement('canvas');
             const offScreenCanvas = document.createElement('canvas');
             const canvas = document.getElementById('canvas');
@@ -478,6 +562,7 @@
             config = config || {
                 drawWidth: 40,
                 transform: [1, 0, 0, 1, 0, 0],
+                tokens: [],
             }
 
             function onCtx(fn) {
@@ -487,6 +572,11 @@
 
             function draw_image() {
                 backgroundImgCtx.drawImage(map_image, 0, 0, map_image.width * imageScale, map_image.height * imageScale);
+
+                for (let token of tokens) {
+                    const scale = !config.grid ? 1 : Math.min(config.grid.pixlesPer5Feet / token.image.width, config.grid.pixlesPer5Feet / token.image.height);
+                    backgroundImgCtx.drawImage(token.image, token.x * imageScale, token.y * imageScale, token.image.width * imageScale * scale, token.image.height * imageScale * scale);
+                }
 
                 if (config.grid && config.grid.visible) {
                     backgroundImgCtx.lineWidth = config.grid.lineWidth;
@@ -565,6 +655,15 @@
                     image.src = fow;
                 }
 
+                Promise.all(config.tokens.map(token => load_image(token.url))).then(images => {
+                    for (let i = 0; i < images.length; i++) {
+                        tokens.push({ image: images[i], x: config.tokens[i].x, y: config.tokens[i].y });
+                    }
+
+                    draw_image();
+                    draw();
+                }).catch(console.error);
+
                 function resize() {
                     const transform = ctx.getTransform();
 
@@ -575,6 +674,7 @@
                     offScreenCanvas.width = window.innerWidth;
 
                     imageScale = Math.min(canvas.width / map_image.width, canvas.height / map_image.height);
+                    console.log(imageScale);
 
                     backgroundImg.height = map_image.height * imageScale;
                     backgroundImg.width = map_image.width * imageScale;
@@ -610,6 +710,10 @@
                             tool = new MoveTool(tool);
                             draw_local();
                             break;
+                        case "m":
+                            tool = new TokenTool(tool);
+                            draw_local();
+                            break;
                         case "s":
                             tool = new FowCircleTool(tool);
                             draw_local();
@@ -621,6 +725,17 @@
                         case "g":
                             tool = new GridTool(tool);
                             draw_local();
+                            break;
+                        case "q":
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*';
+
+                            input.addEventListener('change', evt => {
+                                add_token(evt.target.files[0]);
+                            }, false);
+
+                            input.click();
                             break;
                         case "c":
                             const el = document.createElement('textarea');
