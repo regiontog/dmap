@@ -61,7 +61,6 @@
 
             const tokens = [];
 
-
             room.on('open', error => {
                 if (error) {
                     return console.error(error);
@@ -218,8 +217,8 @@
                             return;
                         }
 
-                        const x = (here.x - imageOffsetX) / imageScale;
-                        const y = (here.y - imageOffsetY) / imageScale;
+                        const x = here.x - imageOffsetX;
+                        const y = here.y - imageOffsetY;
 
                         const x_neg = x - config.grid.pixlesPer5Feet;
                         const y_neg = y - config.grid.pixlesPer5Feet;
@@ -298,8 +297,8 @@
                         return null;
                     }
 
-                    const x = (point.x - imageOffsetX) / imageScale;
-                    const y = (point.y - imageOffsetY) / imageScale;
+                    const x = point.x - imageOffsetX;
+                    const y = point.y - imageOffsetY;
 
                     return {
                         x: Math.floor((x - config.grid.offset.x) / config.grid.pixlesPer5Feet) * config.grid.pixlesPer5Feet + config.grid.offset.x,
@@ -330,8 +329,8 @@
                         const y = point.y - imageOffsetY;
 
                         config.grid.offset = {
-                            x: (x / imageScale) % config.grid.pixlesPer5Feet,
-                            y: (y / imageScale) % config.grid.pixlesPer5Feet,
+                            x: x % config.grid.pixlesPer5Feet,
+                            y: y % config.grid.pixlesPer5Feet,
                         }
                     }
                 }
@@ -385,7 +384,7 @@
                         const pixlesPer5Feet = pixles / gridIntoDist;
 
                         config.grid = {
-                            pixlesPer5Feet: pixlesPer5Feet / imageScale,
+                            pixlesPer5Feet: pixlesPer5Feet,
                             offset: { x: 0, y: 0 },
                             lineWidth: 1,
                             visible: true,
@@ -467,7 +466,7 @@
                     ctx.strokeStyle = "white";
 
                     ctx.beginPath();
-                    ctx.arc(pt.x, pt.y, (config.drawWidth / 2 - ctx.lineWidth) * imageScale, 0, Math.PI * 2);
+                    ctx.arc(pt.x, pt.y, config.drawWidth / 2 - ctx.lineWidth, 0, Math.PI * 2);
                     ctx.stroke();
                 }
 
@@ -503,7 +502,7 @@
                     const pt = ctx.transformedPoint(this.last_x, this.last_y);
 
                     fowCtx.beginPath();
-                    fowCtx.moveTo((pt.x - imageOffsetX) / imageScale, (pt.y - imageOffsetY) / imageScale);
+                    fowCtx.moveTo(pt.x - imageOffsetX, pt.y - imageOffsetY);
 
                     return evt.preventDefault();
                 }
@@ -512,14 +511,14 @@
                     super.on_up(evt);
 
                     const pt = ctx.transformedPoint(this.last_x, this.last_y);
-                    fowCtx.lineTo((pt.x - imageOffsetX) / imageScale, (pt.y - imageOffsetY) / imageScale);
+                    fowCtx.lineTo(pt.x - imageOffsetX, pt.y - imageOffsetY);
                     fowCtx.stroke();
 
                     draw();
                 }
 
                 drag_to(pt) {
-                    fowCtx.lineTo((pt.x - imageOffsetX) / imageScale, (pt.y - imageOffsetY) / imageScale);
+                    fowCtx.lineTo(pt.x - imageOffsetX, pt.y - imageOffsetY);
                     fowCtx.stroke();
 
                     draw();
@@ -557,7 +556,7 @@
 
             const scaleFactor = 1.1;
 
-            let imageOffsetX, imageOffsetY, imageScale;
+            let imageOffsetX, imageOffsetY;
 
             config = config || {
                 drawWidth: 40,
@@ -571,11 +570,11 @@
             }
 
             function draw_image() {
-                backgroundImgCtx.drawImage(map_image, 0, 0, map_image.width * imageScale, map_image.height * imageScale);
+                backgroundImgCtx.drawImage(map_image, 0, 0, map_image.width, map_image.height);
 
                 for (let token of tokens) {
                     const scale = !config.grid ? 1 : Math.min(config.grid.pixlesPer5Feet / token.image.width, config.grid.pixlesPer5Feet / token.image.height);
-                    backgroundImgCtx.drawImage(token.image, token.x * imageScale, token.y * imageScale, token.image.width * imageScale * scale, token.image.height * imageScale * scale);
+                    backgroundImgCtx.drawImage(token.image, token.x, token.y, token.image.width * scale, token.image.height * scale);
                 }
 
                 if (config.grid && config.grid.visible) {
@@ -586,13 +585,13 @@
                     const num_h_lines = map_image.height / config.grid.pixlesPer5Feet;
 
                     for (let i = 0; i < num_v_lines; i++) {
-                        backgroundImgCtx.moveTo((config.grid.offset.x + config.grid.pixlesPer5Feet * i) * imageScale, 0);
-                        backgroundImgCtx.lineTo((config.grid.offset.x + config.grid.pixlesPer5Feet * i) * imageScale, map_image.height * imageScale);
+                        backgroundImgCtx.moveTo(config.grid.offset.x + config.grid.pixlesPer5Feet * i, 0);
+                        backgroundImgCtx.lineTo(config.grid.offset.x + config.grid.pixlesPer5Feet * i, map_image.height);
                     }
 
                     for (let i = 0; i < num_h_lines; i++) {
-                        backgroundImgCtx.moveTo(0, (config.grid.offset.y + config.grid.pixlesPer5Feet * i) * imageScale);
-                        backgroundImgCtx.lineTo(map_image.width * imageScale, (config.grid.offset.y + config.grid.pixlesPer5Feet * i) * imageScale);
+                        backgroundImgCtx.moveTo(0, config.grid.offset.y + config.grid.pixlesPer5Feet * i);
+                        backgroundImgCtx.lineTo(map_image.width, config.grid.offset.y + config.grid.pixlesPer5Feet * i);
                     }
 
                     backgroundImgCtx.stroke();
@@ -608,7 +607,7 @@
                 ctx.drawImage(backgroundImg, imageOffsetX, imageOffsetY);
 
                 ctx.globalAlpha = 0.5;
-                ctx.drawImage(fowCanvas, imageOffsetX, imageOffsetY, map_image.width * imageScale, map_image.height * imageScale);
+                ctx.drawImage(fowCanvas, imageOffsetX, imageOffsetY, map_image.width, map_image.height);
                 ctx.globalAlpha = 1;
 
                 tool.draw_cursor();
@@ -623,7 +622,7 @@
                 offScreenCtx.restore();
 
                 offScreenCtx.drawImage(backgroundImg, imageOffsetX, imageOffsetY);
-                offScreenCtx.drawImage(fowCanvas, imageOffsetX, imageOffsetY, map_image.width * imageScale, map_image.height * imageScale);
+                offScreenCtx.drawImage(fowCanvas, imageOffsetX, imageOffsetY, map_image.width, map_image.height);
             }
 
             const map_image = new Image();
@@ -632,6 +631,9 @@
                 console.debug("Setting event handlers.");
 
                 tool = new MoveTool();
+
+                backgroundImg.height = map_image.height;
+                backgroundImg.width = map_image.width;
 
                 fowCanvas.height = map_image.height;
                 fowCanvas.width = map_image.width;
@@ -673,16 +675,10 @@
                     offScreenCanvas.height = window.innerHeight;
                     offScreenCanvas.width = window.innerWidth;
 
-                    imageScale = Math.min(canvas.width / map_image.width, canvas.height / map_image.height);
-                    console.log(imageScale);
-
-                    backgroundImg.height = map_image.height * imageScale;
-                    backgroundImg.width = map_image.width * imageScale;
-
                     draw_image();
 
-                    imageOffsetX = (canvas.width / 2) - (map_image.width / 2) * imageScale;
-                    imageOffsetY = (canvas.height / 2) - (map_image.height / 2) * imageScale;
+                    imageOffsetX = (canvas.width / 2) - (map_image.width / 2);
+                    imageOffsetY = (canvas.height / 2) - (map_image.height / 2);
 
                     onCtx(ctx => ctx.setTransform(transform.a, transform.b, transform.c, transform.d, transform.e, transform.f));
                     draw();
@@ -693,7 +689,9 @@
                 window.addEventListener('beforeunload', () => {
                     config.transform = transformToArray(ctx.getTransform());
 
+                    console.log("Sending message to save...");
                     saveWorker.postMessage([id, config, fowCanvas.toDataURL()]);
+                    console.log("Message sent!");
                 }, false);
 
                 window.addEventListener('resize', resize, false);
