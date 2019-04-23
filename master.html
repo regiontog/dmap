@@ -256,6 +256,8 @@
                             ctx.translate(pt.x, pt.y);
 
                             ctx.scale(scale, scale);
+                            config.scale = 1 / ctx.getTransform().a;
+                            console.log(config.scale);
                             ctx.translate(-pt.x, -pt.y);
                         });
 
@@ -279,11 +281,7 @@
                     super.on_wheel(evt);
 
                     if (config.grid && Number.isFinite(evt.deltaY) && evt.deltaY != 0) {
-                        config.grid.lineWidth += 0.1 * evt.deltaY / Math.abs(evt.deltaY);
-
-                        if (config.grid.lineWidth < 0.1) {
-                            config.grid.lineWidth = 0.1;
-                        }
+                        config.grid.lineWidth += 0.1 * config.scale * evt.deltaY / Math.abs(evt.deltaY);
 
                         draw_image();
                         draw();
@@ -312,7 +310,7 @@
                     if (this.from) {
                         const here = ctx.transformedPoint(this.last_x, this.last_y);
 
-                        ctx.lineWidth = 0.4;
+                        ctx.lineWidth = 1.5 * config.scale;
                         ctx.strokeStyle = "white";
 
                         ctx.beginPath();
@@ -462,7 +460,7 @@
                 draw_cursor() {
                     const pt = ctx.transformedPoint(this.last_x, this.last_y);
 
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 1.5 * config.scale;
                     ctx.strokeStyle = "white";
 
                     ctx.beginPath();
@@ -562,6 +560,7 @@
                 drawWidth: 40,
                 transform: [1, 0, 0, 1, 0, 0],
                 tokens: [],
+                scale: 1,
             }
 
             function onCtx(fn) {
