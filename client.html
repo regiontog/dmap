@@ -77,7 +77,7 @@
                     });
 
                     incoming.on('signal', signal => {
-                        console.debug(`Attempting to send signal: ${signal}`);
+                        console.debug(`Attempting to send signal: ${JSON.stringify(signal)}`);
                         drone.publish({
                             room: roomName,
                             message: {
@@ -129,14 +129,14 @@
 
                 const messageHandlers = {
                     signal: msg => {
-                        console.debug(`Recieved incoming signal message: ${msg}`);
+                        console.debug(`Recieved incoming signal message: ${JSON.stringify(msg)}`);
                         if (msg.to == id && !incoming.destroyed) {
                             console.debug(`Passing on signal to peer`);
                             incoming.signal(msg.signal);
                         }
                     },
                     broadcast: msg => {
-                        console.debug(`Recieved broadcast message: ${msg}`);
+                        console.debug(`Recieved broadcast message: ${JSON.stringify(msg)}`);
                         if (!connected) {
                             console.debug(`Resetting retry interval`);
                             clearInterval(tryFindPeer);
@@ -148,7 +148,7 @@
 
                 room.on('message', message => {
                     if (message.data.id != id) {
-                        console.debug(`Got message in room: ${message}`);
+                        console.debug(`Got message in room: ${JSON.stringify(message)}`);
                         (messageHandlers[message.data.channel] || (() => { }))(message.data);
                     }
                 });

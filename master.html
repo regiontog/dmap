@@ -83,7 +83,7 @@
 
             const messageHandlers = {
                 reqstream: msg => {
-                    console.debug(`Handling stream request: ${msg}`);
+                    console.debug(`Handling stream request: ${JSON.stringify(msg)}`);
                     if (!outgoing[msg.id]) {
                         console.debug(`Creating new peer as initiator`);
                         outgoing[msg.id] = new SimplePeer({
@@ -130,7 +130,7 @@
                     }
                 },
                 signal: msg => {
-                    console.debug(`Handling stream incoming signal: ${msg}`);
+                    console.debug(`Handling stream incoming signal: ${JSON.stringify(msg)}`);
 
                     if (outgoing[msg.id]) {
                         outgoing[msg.id].signal(msg.signal);
@@ -140,7 +140,7 @@
 
             room.on('message', message => {
                 if (message.data.id != id) {
-                    console.debug(`Message in room ${id}: ${message}`);
+                    console.debug(`Message in room ${JSON.stringify(id)}: ${message}`);
                     (messageHandlers[message.data.channel] || (() => { }))(message.data);
                 }
             });
