@@ -148,7 +148,7 @@
 
                 room.on('message', message => {
                     if (message.data.id != id) {
-                        console.debug(`Got message in room: ${msg}`);
+                        console.debug(`Got message in room: ${message}`);
                         (messageHandlers[message.data.channel] || (() => { }))(message.data);
                     }
                 });
