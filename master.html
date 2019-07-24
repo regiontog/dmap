@@ -140,7 +140,7 @@
 
             room.on('message', message => {
                 if (message.data.id != id) {
-                    console.debug(`Message in room ${JSON.stringify(id)}: ${message}`);
+                    console.debug(`Message in room ${id}: ${JSON.stringify(message)}`);
                     (messageHandlers[message.data.channel] || (() => { }))(message.data);
                 }
             });
