@@ -51,6 +51,7 @@
             const video = document.getElementById('video');
 
             video.addEventListener('play', () => {
+                console.debug("Got play event from video element");
                 if (connected) {
                     setTimeout(() => {
                         console.debug("Requesting frame");
@@ -67,6 +68,7 @@
                 console.debug("Connected to signal room");
 
                 function tryFind() {
+                    console.debug(`Trying to connect to master in room: ${roomName}`);
                     id = guid();
 
                     incoming = new SimplePeer({
@@ -75,6 +77,7 @@
                     });
 
                     incoming.on('signal', signal => {
+                        console.debug(`Attempting to send signal: ${signal}`);
                         drone.publish({
                             room: roomName,
                             message: {
@@ -93,6 +96,7 @@
                     });
 
                     incoming.on('close', () => {
+                        console.debug("Closing peer");
                         connected = false;
                         clearInterval(tryFindPeer);
                         tryFindPeer = setInterval(tryFind, 10000);
@@ -100,6 +104,7 @@
                     });
 
                     incoming.on('stream', stream => {
+                        console.debug("Peer recieved incoming stream, atteching to video element");
                         video.srcObject = stream;
 
                         video.muted = true;
@@ -124,12 +129,16 @@
 
                 const messageHandlers = {
                     signal: msg => {
+                        console.debug(`Recieved incoming signal message: ${msg}`);
                         if (msg.to == id && !incoming.destroyed) {
+                            console.debug(`Passing on signal to peer`);
                             incoming.signal(msg.signal);
                         }
                     },
                     broadcast: msg => {
+                        console.debug(`Recieved broadcast message: ${msg}`);
                         if (!connected) {
+                            console.debug(`Resetting retry interval`);
                             clearInterval(tryFindPeer);
                             tryFindPeer = setInterval(tryFind, 10000);
                             tryFind();
@@ -139,6 +148,7 @@
 
                 room.on('message', message => {
                     if (message.data.id != id) {
+                        console.debug(`Got message in room: ${msg}`);
                         (messageHandlers[message.data.channel] || (() => { }))(message.data);
                     }
                 });

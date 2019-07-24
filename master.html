@@ -33,14 +33,17 @@
         const id = window.location.hash.split("#")[1];
 
         function load_image(url) {
+            console.debug(`Loading image: ${url}`);
             const promise = new Promise((resolve, reject) => {
                 const image = new Image();
 
                 image.addEventListener('load', () => {
+                    console.debug(`Finished loading: ${url}`);
                     resolve(image);
                 });
 
                 image.addEventListener('error', e => {
+                    console.error(`Error loading: ${url}`);
                     reject(e);
                 });
 
@@ -68,6 +71,7 @@
 
                 console.debug("Connected to signal room");
 
+                console.debug(`Publishing room with id: ${id}`);
                 drone.publish({
                     room: id,
                     message: {
@@ -79,13 +83,16 @@
 
             const messageHandlers = {
                 reqstream: msg => {
+                    console.debug(`Handling stream request: ${msg}`);
                     if (!outgoing[msg.id]) {
+                        console.debug(`Creating new peer as initiator`);
                         outgoing[msg.id] = new SimplePeer({
                             initiator: true,
                             config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
                         });
 
                         outgoing[msg.id].on('signal', signal => {
+                            console.debug(`Peer ${msg.id} attempting to send signal: ${signal}`);
                             drone.publish({
                                 room: id,
                                 message: {
@@ -98,15 +105,21 @@
                         });
 
                         outgoing[msg.id].on('data', () => {
+                            console.debug(`Peer ${msg.id} got data signal`);
+                            console.debug(`Drawing once to force frame to video stream`);
                             // Force frame to clients
                             draw();
                         });
 
                         outgoing[msg.id].on('connect', () => {
+                            console.debug(`Peer ${msg.id} got connect signal`);
+                            console.debug(`Adding stream to WebRTC peer`);
                             outgoing[msg.id].addStream(stream);
                         });
 
                         outgoing[msg.id].on('close', () => {
+                            console.debug(`Peer ${msg.id} got close signal`);
+                            console.debug(`Destroying peer ${msg.id}`);
                             outgoing[msg.id].destroy();
                             delete outgoing[msg.id];
                         });
@@ -117,6 +130,8 @@
                     }
                 },
                 signal: msg => {
+                    console.debug(`Handling stream incoming signal: ${msg}`);
+
                     if (outgoing[msg.id]) {
                         outgoing[msg.id].signal(msg.signal);
                     }
@@ -125,6 +140,7 @@
 
             room.on('message', message => {
                 if (message.data.id != id) {
+                    console.debug(`Message in room ${id}: ${message}`);
                     (messageHandlers[message.data.channel] || (() => { }))(message.data);
                 }
             });
@@ -612,6 +628,7 @@
             }
 
             function draw() {
+                console.debug("Drawing frame to video stream");
                 draw_local();
 
                 offScreenCtx.save();
